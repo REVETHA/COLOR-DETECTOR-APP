@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Color Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary: #047857;
+            --bg-light: #f0fdf4;
+            --bg-gradient: linear-gradient(to right, #e0f7fa, var(--bg-light));
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-gradient);
+            margin: 0;
+            padding: 30px 10px;
+            text-align: center;
+        }
+
+        h2 {
+            color: var(--primary);
+            font-size: 1.8rem;
+        }
+
+        img {
+            max-width: 90%;
+            height: auto;
+            border: 5px solid #ddd;
+            border-radius: 15px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+            cursor: crosshair;
+            transition: transform 0.2s ease;
+        }
+
+        img:hover {
+            transform: scale(1.01);
+        }
+
+        #colorResult {
+            margin-top: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #0f172a;
+        }
+
+        #colorBox {
+            width: 120px;
+            height: 120px;
+            margin: 15px auto;
+            border-radius: 12px;
+            border: 2px solid #444;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        #colorBox.highlighted {
+            box-shadow: 0 0 18px 4px rgba(0, 0, 0, 0.25);
+            animation: pulse 1s ease-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.06); }
+            100% { transform: scale(1); }
+        }
+
+        .toggle-label {
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+            gap: 10px;
+        }
+
+        #voiceToggle {
+            transform: scale(1.4);
+        }
+
+        .error {
+            color: red;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            h2 {
+                font-size: 1.4rem;
+            }
+
+            #colorBox {
+                width: 100px;
+                height: 100px;
+            }
+
+            #colorResult {
+                font-size: 18px;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #colorResult.animated {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <h2>Click on the image to detect the color</h2>
+
+    {% if filename %}
+    <img id="uploadedImage" src="{{ url_for('static', filename='uploads/' + filename) }}" alt="Uploaded Image">
+    {% else %}
+    <p class="error">No image uploaded. Please upload a valid image.</p>
+    {% endif %}
+
+    <div class="toggle-label">
+        <input type="checkbox" id="voiceToggle" checked>
+        <label for="voiceToggle">🔊 Voice On</label>
+    </div>
+
+    <div id="colorResult">Waiting for click...</div>
+    <div id="colorBox"></div>
+
+    <script>
+        const img = document.getElementById("uploadedImage");
+        const filename = "{{ filename }}";
+
+        if (img) {
+            img.addEventListener("click", function (event) {
+                const rect = img.getBoundingClientRect();
+                const xClick = event.clientX - rect.left;
+                const yClick = event.clientY - rect.top;
+
+                const scaleX = img.naturalWidth / img.width;
+                const scaleY = img.naturalHeight / img.height;
+
+                const realX = Math.round(xClick * scaleX);
+                const realY = Math.round(yClick * scaleY);
+
+                fetch(`/get_color?filename=${filename}&x=${realX}&y=${realY}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const result = document.getElementById("colorResult");
+                        const colorBox = document.getElementById("colorBox");
+
+                        if (data.error) {
+                            result.innerText = data.error;
+                            result.classList.add("error");
+                            return;
+                        }
+
+                        // Reset styles
+                        result.classList.remove("error", "animated");
+                        void result.offsetWidth; // force reflow
+
+                        result.innerText = `${data.color} (R:${data.r}, G:${data.g}, B:${data.b})`;
+                        result.classList.add("animated");
+
+                        colorBox.style.backgroundColor = `rgb(${data.r}, ${data.g}, ${data.b})`;
+
+                        colorBox.classList.remove("highlighted");
+                        void colorBox.offsetWidth;
+                        colorBox.classList.add("highlighted");
+
+                        const voiceToggle = document.getElementById("voiceToggle");
+                        if (voiceToggle.checked) {
+                            fetch(`/speak_color?color=${data.color}&r=${data.r}&g=${data.g}&b=${data.b}`);
+                        }
+                    })
+                    .catch(err => {
+                        document.getElementById("colorResult").innerText =
+                            "An error occurred while detecting color.";
+                        document.getElementById("colorResult").classList.add("error");
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
